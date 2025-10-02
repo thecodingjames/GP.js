@@ -1,6 +1,26 @@
+class Gamepad {
+  #native
+
+  get id() {
+    return this.#native.id
+  }
+
+  get buttons() {
+    return this.#native.buttons
+  }
+
+  get axes() {
+    return this.#native.axes
+  }
+
+  constructor(nativeGamepad) {
+    this.#native = nativeGamepad
+  }
+}
+
 class GP {
 
-    get Events() {
+    static get Events() {
       const events = [
         'connect',
         'disconnect',
@@ -16,26 +36,30 @@ class GP {
     }
 
     get gamepads() {
-        return navigator.getGamepads()
+        return this.#gamepads
     }
     
     #subscribers = {
-        [this.Events.connect]: [],
-        [this.Events.disconnect]: [],
-        [this.Events.inputs]: [],
-        [this.Events.press]: [],
-        [this.Events.release]: [],
+        [GP.Events.connect]: [],
+        [GP.Events.disconnect]: [],
+        [GP.Events.inputs]: [],
+        [GP.Events.press]: [],
+        [GP.Events.release]: [],
     }
 
     #states = {}
+    #gamepads = []
 
     constructor() {
         window.addEventListener("gamepadconnected", (evt) => {
             const gamepad = evt.gamepad
 
+            this.#gamepads.push(
+              new Gamepad(gamepad)
+            )
             this.#states[gamepad.id] = this.#gamepadState(gamepad)
 
-            this.#broadcast(this.Events.connect, gamepad)
+            this.#broadcast(GP.Events.connect, gamepad)
         });
 
         window.addEventListener("gamepaddisconnected", (evt) => {
@@ -44,7 +68,7 @@ class GP {
             const { [gamepad.id]: deleted, ...kept } = this.#states
             this.#states = kept
 
-            this.#broadcast(this.Events.disconnect, gamepad)
+            this.#broadcast(GP.Events.disconnect, gamepad)
         });
 
         requestAnimationFrame(this.listenForInputs.bind(this));
@@ -76,23 +100,23 @@ class GP {
     }
 
     onConnect(callback) {
-        this.#subscribe(this.Events.connect, callback)
+        this.#subscribe(GP.Events.connect, callback)
     }
 
     onDisconnect(callback) {
-        this.#subscribe(this.Events.disconnect, callback)
+        this.#subscribe(GP.Events.disconnect, callback)
     }
 
     onInputs(callback) {
-        this.#subscribe(this.Events.inputs, callback)
+        this.#subscribe(GP.Events.inputs, callback)
     }
 
     onPress(callback, buttons = undefined) {
-        this.#onButtonEvent(this.Events.press, callback, buttons)
+        this.#onButtonEvent(GP.Events.press, callback, buttons)
     }
 
     onRelease(callback, buttons = undefined) {
-        this.#onButtonEvent(this.Events.release, callback, buttons)
+        this.#onButtonEvent(GP.Events.release, callback, buttons)
     }
 
     #onButtonEvent(event, callback, buttons) {
@@ -122,14 +146,14 @@ class GP {
         }
 
         if (Object.keys(inputs).length > 0) {
-            this.#broadcast(this.Events.inputs, inputs)
+            this.#broadcast(GP.Events.inputs, inputs)
 
             for (const [gamepadId, newState] of Object.entries(inputs)) {
                 const oldState = this.#states[gamepadId] 
 
                 for (const [button, pressed] of Object.entries(newState.buttons)) {
                     if (oldState.buttons[button] != pressed) {
-                        const event = pressed ? this.Events.press : this.Events.release
+                        const event = pressed ? GP.Events.press : GP.Events.release
 
                         this.#broadcast(
                             event, 
