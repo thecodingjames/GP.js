@@ -1,5 +1,6 @@
 class Gamepad {
   #native
+  #lastState
 
   get id() {
     return this.#native.id
@@ -13,8 +14,55 @@ class Gamepad {
     return this.#native.axes
   }
 
+  get state() {
+    const processInputs = (entries, prop) => {
+      return (
+        Array.from(entries)
+        .reduce((result, entry) => {
+          result[entry[0]] = prop ? entry[1][prop] : entry[1] // Axes has raw value, buttons is an object with .pressed
+          return result
+        }, {})
+      )
+    }
+
+    return {
+        buttons: processInputs(this.buttons.entries(), 'pressed'),
+        axes: processInputs(this.axes.entries())
+    }
+  }
+
   constructor(nativeGamepad) {
     this.#native = nativeGamepad
+    this.#lastState = this.state
+  }
+
+  get changes() {
+    const old = this.#lastState
+    const current = this.state
+
+    const changes = {
+      state: {},
+      [GP.Events.press]: [],
+      [GP.Events.release]: [],
+    }
+
+    if (JSON.stringify(old) != JSON.stringify(current)) {
+      changes.state = current
+
+      for (const [button, pressed] of Object.entries(current.buttons)) {
+          if (old.buttons[button] != pressed) {
+              const event = pressed ? GP.Events.press : GP.Events.release
+
+              changes[event].push(button)
+          }
+      }
+
+      this.#lastState = this.state
+
+      return changes
+    }
+
+    return null
   }
 }
 
@@ -47,17 +95,13 @@ class GP {
         [GP.Events.release]: [],
     }
 
-    #states = {}
-    #gamepads = []
+    #gamepads = {}
 
     constructor() {
         window.addEventListener("gamepadconnected", (evt) => {
-            const gamepad = evt.gamepad
+            const gamepad = new Gamepad(evt.gamepad)
 
-            this.#gamepads.push(
-              new Gamepad(gamepad)
-            )
-            this.#states[gamepad.id] = this.#gamepadState(gamepad)
+            this.#gamepads[gamepad.id] = gamepad
 
             this.#broadcast(GP.Events.connect, gamepad)
         });
@@ -65,10 +109,10 @@ class GP {
         window.addEventListener("gamepaddisconnected", (evt) => {
             const gamepad = evt.gamepad
 
-            const { [gamepad.id]: deleted, ...kept } = this.#states
-            this.#states = kept
+            const deletedGamepad = this.#gamepads[gamepad.id]
+            delete this.#gamepads[gamepad.id]
 
-            this.#broadcast(GP.Events.disconnect, gamepad)
+            this.#broadcast(GP.Events.disconnect, deletedGamepad)
         });
 
         requestAnimationFrame(this.listenForInputs.bind(this));
@@ -80,23 +124,6 @@ class GP {
 
     #broadcast(event, payload = undefined, predicate = () => true) {
         this.#subscribers[event]?.filter(predicate).forEach( ({ callback }) => callback(payload) )
-    }
-
-    #gamepadState(gamepad) {
-        const state = {
-            buttons: {},
-            axes: {},
-        }
-
-        for (const [i, button] of gamepad.buttons.entries()) {
-            state.buttons[i] = button.pressed
-        }
-
-        for (const [i, axis] of gamepad.axes.entries()) {
-            state.axes[i] = axis
-        }
-
-        return state
     }
 
     onConnect(callback) {
@@ -130,71 +157,62 @@ class GP {
     }
 
     listenForInputs() {
-        const inputs = {}
+      const inputs = {}
 
-        for (const gamepad of this.gamepads) {
-            if (!gamepad) {
-                continue;
-            }
+      for (const [id, gamepad] of Object.entries(this.#gamepads)) {
+        const changes = gamepad.changes
 
-            const oldState = this.#states[gamepad.id]
-            const newState = this.#gamepadState(gamepad) 
-
-            if (JSON.stringify(oldState) != JSON.stringify(newState)) {
-                inputs[gamepad.id] = newState     
-            }
+        if (changes) {
+          inputs[id] = changes
         }
+      }
 
-        if (Object.keys(inputs).length > 0) {
-            this.#broadcast(GP.Events.inputs, inputs)
+      if (Object.keys(inputs).length > 0) {
+          this.#broadcast(GP.Events.inputs, inputs)
 
-            for (const [gamepadId, newState] of Object.entries(inputs)) {
-                const oldState = this.#states[gamepadId] 
+          for (const [id, changes] of Object.entries(inputs)) {
+            [GP.Events.press, GP.Events.release].forEach(event => {
+              changes[event].forEach(button => {
+                this.#broadcast(
+                  event, 
+                  { button },
+                  (eventData) => {
+                      return eventData.button === undefined || eventData.button == button
+                  }
+                )
+              })
+            })
+          }
+      }
 
-                for (const [button, pressed] of Object.entries(newState.buttons)) {
-                    if (oldState.buttons[button] != pressed) {
-                        const event = pressed ? GP.Events.press : GP.Events.release
-
-                        this.#broadcast(
-                            event, 
-                            { button },
-                            (eventData) => {
-                                return eventData.button === undefined || eventData.button == button
-                            }
-                        )
-                    }
-                }
-
-                this.#states[gamepadId] = newState
-            }
-        }
-
-        requestAnimationFrame(this.listenForInputs.bind(this));
+      requestAnimationFrame(this.listenForInputs.bind(this));
     }
 
     unsubscribe(callback, event = undefined) {
-        if (event) {
-            const events = this.#subscribers[event]
+      const removeFilter = (fct) => (e) => e.callback != fct
 
-            if (events === undefined) {
-                console.error(`Invalid event: ${event}`)
-            } else {
-                this.#subscribers[event] = events.filter((e) => e != callback)
-            }
+      if (event) {
+        const events = this.#subscribers[event]
 
+        if (events === undefined) {
+          console.error(`Invalid event: ${event}`)
         } else {
-            this.#subscribers = Object.fromEntries(
-                Object.entries(this.#subscribers).map((e) => {
-                    const eventName = e[0]
-                    const eventCallbacks = e[1].filter((e) => e != callback)
-
-                    return [
-                        eventName,
-                        eventCallbacks
-                    ]
-                })
-            )
+          this.#subscribers[event] = events.filter(removeFilter(callback))
         }
+
+      } else {
+        this.#subscribers = Object.fromEntries(
+          Object.entries(this.#subscribers).map((e) => {
+            const eventName = e[0]
+            const eventCallbacks = e[1].filter(removeFilter(callback))
+
+            return [
+                eventName,
+                eventCallbacks
+            ]
+          })
+        )
+      }
     }
 }
 
