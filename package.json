@@ -1,0 +1,8 @@
+{
+  "scripts": {
+    "doc": "./node_modules/.bin/jsdoc gp.js --readme ./README.md --destination ./doc"
+  },
+  "dependencies": {
+    "jsdoc": "^4.0.4"
+  }
+}
