@@ -1,8 +1,13 @@
 {
   "scripts": {
+    "dev": "concurrently --names 'BROWSERSYNC,DOCS' --kill-others './node_modules/.bin/browser-sync --watch' 'onchange gp.js README.md -- npm run docs'",
     "docs": "./node_modules/.bin/jsdoc gp.js --template ./node_modules/docdash/ --readme ./README.md --destination ./docs"
   },
   "dependencies": {
-    "jsdoc": "^4.0.4"
+    "browser-sync": "^3.0.4",
+    "concurrently": "^9.2.1",
+    "docdash": "^2.0.2",
+    "jsdoc": "^4.0.4",
+    "onchange": "^7.1.0"
   }
 }
