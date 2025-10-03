@@ -11,14 +11,14 @@
 
         const connected = (gamepad) => {
             console.log({connected: gamepad})
-
-            gamepad.onInputs((inputs) => console.log({ gamepadInput: inputs }))
         }
         GP.onConnect(connected)
 
         const b = (gamepad) => {
             console.log({connected_b: gamepad}) // Will show only once, on first controller connect
             GP.unsubscribe(b) 
+
+            gamepad.onInputs(({gamepad, inputs}) => console.log({ gamepad, inputs }))
         }
         GP.onConnect(b)
 
@@ -26,11 +26,11 @@
 
         GP.onInputs((inputs) => console.log({inputs: inputs}))
 
-        GP.onPress((button) => console.log({ any_button_press: button }))
-        GP.onPress((button) => console.log({ button_press: button }), [0])
+        GP.onPress((context) => console.log({ any_button_press: context }))
+        GP.onPress((context) => console.log({ button_0_press: context }), [0])
 
-        GP.onRelease((button) => console.log({ any_button_release: button }))
-        GP.onRelease((button) => console.log({ button_release: button }), [0])
+        GP.onRelease((context) => console.log({ any_button_release: context }))
+        GP.onRelease((context) => console.log({ button_0_release: context }), [0])
     </script>
     <script>
 

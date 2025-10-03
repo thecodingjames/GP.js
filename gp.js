@@ -6,7 +6,7 @@ class Gamepad {
   #lastState
 
   get id() {
-    return this.#native.id
+    return `${this.#native.index}${this.#native.id}`
   }
 
   get buttons() {
@@ -70,7 +70,7 @@ class Gamepad {
   }
 
   onInputs(callback) {
-    gp.onInputs(callback)
+    gp.onInputs(callback, [ this ])
   }
 }
 
@@ -115,7 +115,7 @@ class GP {
         });
 
         window.addEventListener("gamepaddisconnected", (evt) => {
-            const deletedGamepad = this.#gamepads[evt.gamepad.id]
+            const deletedGamepad = new Gamepad(evt.gamepad)
 
             delete this.#gamepads[deletedGamepad.id]
 
@@ -170,32 +170,49 @@ class GP {
     }
 
     listenForInputs() {
-      const inputs = {}
-
-      for (const [id, gamepad] of Object.entries(this.#gamepads)) {
+      const inputs = Object.entries(this.#gamepads).reduce((acc, [id, gamepad]) => {
         const changes = gamepad.changes
 
         if (changes) {
-          inputs[id] = changes
+          acc[id] = changes
         }
-      }
+
+        return acc
+      }, {})
 
       if (Object.keys(inputs).length > 0) {
-          this.#broadcast(GP.Events.inputs, inputs)
+          this.#broadcast(
+            GP.Events.inputs, 
+            inputs, 
+            (context) => {
+              return context.gamepad == undefined
+            }
+          )
 
-          for (const [id, changes] of Object.entries(inputs)) {
+          Object.entries(inputs).forEach(([id, changes]) => {
+          
+            this.#broadcast(
+              GP.Events.inputs, 
+              { gamepad: id, inputs: changes },
+              (context) => {
+                return context.gamepad == id
+              }
+            )
+
+            const self = this;
             [GP.Events.press, GP.Events.release].forEach(event => {
               changes[event].forEach(button => {
-                this.#broadcast(
+                self.#broadcast(
                   event, 
                   { gamepad: id, button },
-                  (eventData) => {
-                      return eventData.button === undefined || eventData.button == button
+                  (context) => {
+                      return context.button === undefined || context.button == button
                   }
                 )
               })
             })
-          }
+
+          })
       }
 
       requestAnimationFrame(this.listenForInputs.bind(this));
