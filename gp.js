@@ -1,5 +1,6 @@
 /** @module GP */
 
+/** @class Gamepad */
 class Gamepad {
   #native
   #lastState
