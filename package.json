@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "doc": "./node_modules/.bin/jsdoc gp.js --readme ./README.md --destination ./doc"
+    "doc": "./node_modules/.bin/jsdoc gp.js --readme ./README.md --destination ./docs"
   },
   "dependencies": {
     "jsdoc": "^4.0.4"
