@@ -11,6 +11,8 @@
 
         const connected = (gamepad) => {
             console.log({connected: gamepad})
+
+            gamepad.onInputs((inputs) => console.log({ gamepadInput: inputs }))
         }
         GP.onConnect(connected)
 

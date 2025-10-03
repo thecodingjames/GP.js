@@ -46,15 +46,16 @@ class Gamepad {
       [GP.Events.release]: [],
     }
 
+    // Quick and dirty comparison, might refactor later
     if (JSON.stringify(old) != JSON.stringify(current)) {
       changes.state = current
 
       for (const [button, pressed] of Object.entries(current.buttons)) {
-          if (old.buttons[button] != pressed) {
-              const event = pressed ? GP.Events.press : GP.Events.release
+        if (old.buttons[button] != pressed) {
+          const event = pressed ? GP.Events.press : GP.Events.release
 
-              changes[event].push(button)
-          }
+          changes[event].push(button)
+        }
       }
 
       this.#lastState = this.state
@@ -63,6 +64,10 @@ class Gamepad {
     }
 
     return null
+  }
+
+  onInputs(callback) {
+    gp.onInputs(callback)
   }
 }
 
@@ -107,10 +112,9 @@ class GP {
         });
 
         window.addEventListener("gamepaddisconnected", (evt) => {
-            const gamepad = evt.gamepad
+            const deletedGamepad = this.#gamepads[evt.gamepad.id]
 
-            const deletedGamepad = this.#gamepads[gamepad.id]
-            delete this.#gamepads[gamepad.id]
+            delete this.#gamepads[deletedGamepad.id]
 
             this.#broadcast(GP.Events.disconnect, deletedGamepad)
         });
@@ -127,33 +131,39 @@ class GP {
     }
 
     onConnect(callback) {
-        this.#subscribe(GP.Events.connect, callback)
+      this.#subscribe(GP.Events.connect, callback)
     }
 
     onDisconnect(callback) {
-        this.#subscribe(GP.Events.disconnect, callback)
+      this.#subscribe(GP.Events.disconnect, callback)
     }
 
-    onInputs(callback) {
+    onInputs(callback, gamepads = undefined) {
+      if (gamepads) {
+        gamepads.forEach((g) => {
+          this.#subscribe(GP.Events.inputs, callback, { gamepad: g.id })
+        })
+      } else {
         this.#subscribe(GP.Events.inputs, callback)
+      }
     }
 
     onPress(callback, buttons = undefined) {
-        this.#onButtonEvent(GP.Events.press, callback, buttons)
+      this.#onButtonEvent(GP.Events.press, callback, buttons)
     }
 
     onRelease(callback, buttons = undefined) {
-        this.#onButtonEvent(GP.Events.release, callback, buttons)
+      this.#onButtonEvent(GP.Events.release, callback, buttons)
     }
 
     #onButtonEvent(event, callback, buttons) {
-        if (buttons) {
-            buttons.forEach((b)=> {
-                this.#subscribe(event, callback, { button: b })
-            })
-        } else {
-            this.#subscribe(event, callback, { button: undefined })
-        }
+      if (buttons) {
+        buttons.forEach((b)=> {
+          this.#subscribe(event, callback, { button: b })
+        })
+      } else {
+        this.#subscribe(event, callback, { button: undefined })
+      }
     }
 
     listenForInputs() {
@@ -175,7 +185,7 @@ class GP {
               changes[event].forEach(button => {
                 this.#broadcast(
                   event, 
-                  { button },
+                  { gamepad: id, button },
                   (eventData) => {
                       return eventData.button === undefined || eventData.button == button
                   }
